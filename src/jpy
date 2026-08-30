@@ -1,0 +1,107 @@
+#!/usr/bin/env zsh
+
+local SRC_PATH=$XPY_PATH_SRC_SH
+
+# source "$SRC_PATH/utils.sh"
+
+get_venv_name_or_default() {
+    local venv_name="$1"
+    if [[ -z "$venv_name" ]]; then
+        venv_name="venv"
+    fi
+    echo ".$venv_name"
+}
+
+get_venv_dir() {
+    local venv_name="$1"
+    local venv_dir
+    if [[ -z "$venv_name" ]]; then
+        venv_dir="$(pwd)/venv"
+    else
+        venv_dir="$(pwd)/$venv_name"
+    fi
+    echo "$venv_dir"
+}
+
+create_venv() {
+    local venv_dir="$1"
+    if [ -e $venv_dir ]; then
+        echo "ERROR: '$venv_dir' exists" >&2
+        exit 2
+    fi
+    virtualenv "$venv_dir"
+}
+
+activate_venv() {
+    local venv_dir="$1"
+    local venv_activate="$venv_dir/bin/activate"
+
+    if [[ ! -f "$venv_activate" ]]; then
+        echo "ERROR: '$venv_activate' not found" >&2
+        exit 2
+    fi
+    if [[ ! -z $VIRTUAL_ENV_PROMPT ]]; then
+        deactivate
+    fi
+    source $venv_activate
+}
+
+requirement_dev() {
+    local target="$(pwd)/requirements-dev.in" 
+    if [[ -e "$target" ]]; then
+        echo "WARNING: '$targe't exists"
+    elif; then
+        cp "$SRC_PATH/boilerplate-dev.in" "$target"
+        echo "INFO: created '$target'"
+    fi
+}
+
+requirement_proj() {
+    local target="$(pwd)/requirements-proj.in" 
+    if [[ -e "$target" ]]; then
+        echo "WARNING: '$target' exists"
+    elif; then
+        cp "$SRC_PATH/boilerplate-proj.in" "$target"
+        echo "INFO: created '$target'"
+    fi
+}
+
+local cmd="$1"
+
+if [[ -z "$cmd" ]]; then
+    echo "ERROR: missing command" >&2
+    exit 2
+fi
+
+if [[ "$cmd" == "create" || "$cmd" == "c" ]]; then
+    local venv_name=$(get_venv_name_or_default "$2")
+    local venv_dir=$(get_venv_dir "$venv_name")
+    create_venv "$venv_dir"
+    activate_venv "$venv_dir"
+
+elif [[ "$cmd" == "activate" || "$cmd" == "a" ]]; then
+    local venv_name=$(get_venv_name_or_default "$2")
+    local venv_dir=$(get_venv_dir "$venv_name")
+    activate_venv "$venv_dir"
+
+elif [[ "$cmd" == "requirement" || "$cmd" == "r" ]]; then
+    if [[ -z "$2" ]]; then
+        requirement_dev
+        requirement_proj
+
+    elif [[ "$2" == "dev" ]]; then
+        requirement_dev
+
+    elif [[ "$2" == "proj" ]]; then
+        requirement_proj
+
+    fi
+
+
+elif [[ "$cmd" == "jupyter" || "$cmd" == "j" ]]; then
+
+
+fi
+
+
+

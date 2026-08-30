@@ -1,0 +1,8 @@
+pip
+jupyterlab
+jupyterlab-lsp
+python-lsp-server[all]
+jupyterlab-code-formatter
+black
+isort
+

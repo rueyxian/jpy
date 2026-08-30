@@ -1,0 +1,30 @@
+#!/usr/bin/env zsh
+
+local TARGET_PATH="$(pwd)/jpy"
+local SYMLINK_PATH="$HOME/.local/sh/"
+
+mkdir -p "$SYMLINK_PATH"
+
+if [ ! -e "$SYMLINK_PATH/jyp" ]; then
+    echo "WARNING: '$SYMLINK_PATH/jyp' exists."
+elif; then
+    ln -s "$TARGET_PATH" "$SYMLINK_PATH"
+fi
+
+LINE="export PATH=$HOME/.local/sh"
+ZSH_FILE="$HOME/.zshrc"
+
+if [ ! -e "$ZSH_FILE" ]; then
+    echo "ERROR: '$ZSH_FILE' not found." >&2
+    exit 2
+fi
+
+if ! grep -qF "$LINE" "$ZSH_FILE" 2>/dev/null; then
+    echo "$LINE" >> "$ZSH_FILE"
+    echo "INFO: appended '$LINE' to '$ZSH_FILE'"
+    source "$ZSH_FILE"
+else
+    echo "INFO: '$LINE' already exists in '$ZSH_FILE'; skipping."
+fi
+
+
