@@ -1,15 +1,11 @@
 #!/usr/bin/env zsh
 
-local SRC_PATH=$XPY_PATH_SRC_SH
-
-# source "$SRC_PATH/utils.sh"
-
 get_venv_name_or_default() {
     local venv_name="$1"
     if [[ -z "$venv_name" ]]; then
         venv_name="venv"
     fi
-    echo ".$venv_name"
+    echo "$venv_name"
 }
 
 get_venv_dir() {
@@ -23,85 +19,227 @@ get_venv_dir() {
     echo "$venv_dir"
 }
 
-create_venv() {
+is_venv() {
     local venv_dir="$1"
-    if [ -e $venv_dir ]; then
-        echo "ERROR: '$venv_dir' exists" >&2
-        exit 2
+    if [ -f "$venv_dir/pyvenv.cfg" ] || \
+       [ -f "$venv_dir/bin/python" ] || \
+       [ -f "$venv_dir/Scripts/python.exe" ]; then
+       return 0
     fi
-    virtualenv "$venv_dir"
+    return 1
+}
+
+
+create_venv() {
+    local OPTIND=1   # although this isn't required for zsh
+    local opt
+    local venv_name=".venv"
+    local visible=0
+    local install=0
+
+    while getopts ":vif:" opt "$@"; do
+        case $opt in
+            v)
+                visible=1
+                ;;
+
+            i)
+                install=1
+                ;;
+
+            f)
+                venv_name=".$OPTARG"
+                ;;
+
+            \?)
+                echo "Invalid option: -$OPTARG"
+                return 2
+                ;;
+
+        esac
+    done
+
+    if [[ "$visible" == 1 ]]; then
+        venv_name="${venv_name:1}"
+    fi
+    local venv_dir=$(get_venv_dir "$venv_name")
+
+    if [[ ! -e $venv_dir ]]; then
+        virtualenv "$venv_dir"
+
+    elif is_venv $venv_dir; then
+        echo "NOOP: virtual environment '$venv_dir' exists"
+
+    else
+        echo "ERROR: path '$venv_dir' exists"
+        return 1
+    fi
+
+    if [[ "$install" == 1 ]]; then
+        local venv_activate="$venv_dir/bin/activate"
+        source "$venv_activate"
+
+        pip install --upgrade pip
+        pip install --upgrade jupyterlab
+        pip install --upgrade jupyterlab-lsp
+        pip install 'python-lsp-server[all]'
+
+        pip install --upgrade jupyterlab-code-formatter
+        pip install --upgrade black isort
+    fi
+
+    return 0
 }
 
 activate_venv() {
-    local venv_dir="$1"
-    local venv_activate="$venv_dir/bin/activate"
+    local _output="$1"
+    shift
 
-    if [[ ! -f "$venv_activate" ]]; then
-        echo "ERROR: '$venv_activate' not found" >&2
-        exit 2
+    local OPTIND=1 # although this isn't required for zsh
+    local opt
+    local venv_name="venv"
+    local visible=0
+
+    while getopts ":vf:" opt "$@"; do
+        case $opt in
+            v)
+                visible=1
+                ;;
+
+            f)
+                venv_name="$OPTARG"
+                ;;
+
+            \?)
+                typeset -g "$_output"="Invalid option: -$OPTARG"
+                return 2
+                ;;
+
+        esac
+    done
+
+    local dir1
+    local dir2
+    if [[ "$visible" == 0 ]]; then
+        dir1=$(get_venv_dir ".$venv_name")
+        dir2=$(get_venv_dir "$venv_name")
+    elif; then
+        dir1=$(get_venv_dir "$venv_name")
+        dir2=$(get_venv_dir ".$venv_name")
     fi
+
     if [[ ! -z $VIRTUAL_ENV_PROMPT ]]; then
         deactivate
     fi
-    source $venv_activate
+
+    # echo "dir1: $dir1"
+    # echo "dir2: $dir2"
+
+    if is_venv "$dir1"; then
+        echo "dir1: $dir1"
+        source "$dir1/bin/activate"
+        return 0
+    elif is_venv "$dir2"; then
+        echo "dir2: $dir2"
+        source "$dir2/bin/activate"
+        return 0
+    fi
+
+    typeset -g "$_output"="ERROR: '$dir1' and '$dir2' not found."
+    return 1
 }
 
 requirement_dev() {
     local target="$(pwd)/requirements-dev.in" 
     if [[ -e "$target" ]]; then
-        echo "WARNING: '$targe't exists"
+        echo "NOOP: '$targe't exists."
     elif; then
         cp "$SRC_PATH/boilerplate-dev.in" "$target"
-        echo "INFO: created '$target'"
+        echo "INFO: created '$target'."
     fi
 }
 
 requirement_proj() {
     local target="$(pwd)/requirements-proj.in" 
     if [[ -e "$target" ]]; then
-        echo "WARNING: '$target' exists"
+        echo "NOOP: '$target' exists."
     elif; then
         cp "$SRC_PATH/boilerplate-proj.in" "$target"
-        echo "INFO: created '$target'"
+        echo "INFO: created '$target'."
     fi
 }
 
-local cmd="$1"
+run_jupyter() {
+    local output
+    local errno
+    activate_venv output "$@"
+    errno="$?"
+    if [[ ! -z "$output" ]]; then
+        echo "$output"
+    fi
+    if [[ "$errno" != 0 ]]; then
+        return "$errno" || exit "$errno"
+    fi
+    
+    jupyter lab
+}
 
-if [[ -z "$cmd" ]]; then
-    echo "ERROR: missing command" >&2
-    exit 2
-fi
-
-if [[ "$cmd" == "create" || "$cmd" == "c" ]]; then
-    local venv_name=$(get_venv_name_or_default "$2")
-    local venv_dir=$(get_venv_dir "$venv_name")
-    create_venv "$venv_dir"
-    activate_venv "$venv_dir"
-
-elif [[ "$cmd" == "activate" || "$cmd" == "a" ]]; then
-    local venv_name=$(get_venv_name_or_default "$2")
-    local venv_dir=$(get_venv_dir "$venv_name")
-    activate_venv "$venv_dir"
-
-elif [[ "$cmd" == "requirement" || "$cmd" == "r" ]]; then
-    if [[ -z "$2" ]]; then
-        requirement_dev
-        requirement_proj
-
-    elif [[ "$2" == "dev" ]]; then
-        requirement_dev
-
-    elif [[ "$2" == "proj" ]]; then
-        requirement_proj
-
+main() {
+    local cmd=$1
+    shift
+    if [[ -z "$cmd" ]]; then
+        echo "ERROR: missing command."
+        return 2
     fi
 
+    local output
+    local errno
+    case "$cmd" in
+        create||c)
+            output=$(create_venv "$@")
+            errno="$?"
+            ;;
 
-elif [[ "$cmd" == "jupyter" || "$cmd" == "j" ]]; then
+        activate||a)
+            activate_venv output "$@"
+            errno="$?"
+            ;;
+
+        requirement||r)
+            if [[ -z "$2" ]]; then
+                requirement_dev
+                requirement_proj
+
+            elif [[ "$2" == "dev" ]]; then
+                requirement_dev
+
+            elif [[ "$2" == "proj" ]]; then
+                requirement_proj
+
+            fi
+            ;;
+
+        jupyter||j)
+            output=$(run_jupyter "$@")
+            errno="$?"
+            ;;
+        *)
+            output="ERROR: Unknown command '$cmd'."
+            errno=2
+            ;;
+    esac
 
 
-fi
+    if [[ ! -z "$output" ]]; then
+        echo "$output"
+    fi
+    if [[ "$errno" != 0 ]]; then
+        return "$errno" || exit "$errno"
+    fi
+   
+}
+
+main "$@"
 
 
 
