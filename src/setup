@@ -1,0 +1,75 @@
+#!/usr/bin/env zsh
+
+# install pipx if needed
+local KERNEL="$(uname -s)"
+local PIPX="pipx"
+if [[ "$KERNEL" == "Linux" ]]; then
+  if command -v "$PIPX" >/dev/null 2>&1; then
+    echo "NOOP: '$PIPX' is installed via apt."
+  else
+    sudo apt install pipx
+  fi
+
+elif [[ "$KERNEL" == "Darwin" ]]; then
+  if brew list "$PIPX" >/dev/null 2>&1; then
+    echo "NOOP: '$PIPX' is installed via brew."
+  else
+    brew install pipx
+  fi
+else
+  echo "ERROR: Unhandled kernel '$KERNEL'."
+  return 2 2>/dev/null || exit 2
+
+fi
+
+# install virtualenv if needed
+local VIRTUALENV="virtualenv"
+if pipx list | grep -q "package $VIRTUALENV"; then
+  echo "NOOP: '$VIRTUALENV' is installed via pipx."
+else
+  pipx install virtualenv
+fi
+
+# install pip-tools if needed
+local PIP_TOOLS="pip-tools"
+if pipx list | grep -q "package $PIP_TOOLS"; then
+  echo "NOOP: '$PIP_TOOLS' is installed via pipx."
+else
+  pipx install pip-tools
+fi
+
+# create symlink
+local SYMLINK_DIR="$HOME/.local/sh"
+mkdir -p "$SYMLINK_DIR"
+
+local SYMLINK_PATH="$SYMLINK_DIR/jpy"
+local TARGET_PATH="$(pwd)/jpy"
+
+if [[ -L "$SYMLINK_PATH" ]] && [[ "$(readlink -f "$SYMLINK_PATH")" == "$(readlink -f "$TARGET_PATH")" ]]; then
+  echo "NOOP: '$SYMLINK_PATH' is linked."
+
+elif [[ ! -e "$SYMLINK_PATH" ]]; then
+  ln -s "$TARGET_PATH" "$SYMLINK_PATH"
+  echo "INFO: Created symlink '$SYMLINK_PATH'."
+
+elif; then
+  echo "ERROR: Unexpected path '$SYMLINK_PATH' exists."
+  return 1 1>/dev/null || exit 1
+fi
+
+# adding evironment PATH
+LINE='export PATH="$PATH:$HOME/.local/sh"'
+ZSH_FILE="$HOME/.zshrc"
+
+if [[ ! -e "$ZSH_FILE" ]]; then
+  echo "ERROR: '$ZSH_FILE' not found." >&2
+  return 1 1>/dev/null || exit 1
+fi
+
+if ! grep -qF "$LINE" "$ZSH_FILE" 2>/dev/null; then
+  echo "\n$LINE" >>"$ZSH_FILE"
+  echo "INFO: appended '$LINE' to '$ZSH_FILE'"
+  source "$ZSH_FILE"
+else
+  echo "NOOP: '$LINE' already exists in '$ZSH_FILE'."
+fi
